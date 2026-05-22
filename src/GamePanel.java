@@ -63,7 +63,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private int[][] activeBlock2;
     private int[][] activeBlock3;
 
-    // --- NEW FOR VERSION 9: SCORE TALLY VARIABLE ---
     private int score = 0;
 
     public GamePanel() {
@@ -96,10 +95,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
         blockHomeY = startY + gridHeight + 20;
 
-        // --- NEW FOR VERSION 9: DRAW SCORE INTERFACE ABOVE THE GRID ---
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 22));
-        // Placed 30 pixels above the grid starting Y point, aligned with the left edge of the grid
         g.drawString("Score: " + score, startX, startY - 30);
 
         for (int row = 0; row < GRID_ROWS; row++) {
@@ -241,7 +238,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 grid[fillRow][fillCol] = true;
             }
 
-            // --- NEW FOR VERSION 9: ACCRUE SCORE BASED ON CELL VECTOR SIZE ---
             score += currentShape.length;
 
             blockPlaced[selectedBlock] = true;
@@ -269,6 +265,19 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                     }
                 }
                 if (colFull) colsToClear[c] = true;
+            }
+
+            // --- NEW FOR VERSION 10: TALLY LINE-CLEARING BONUSES ---
+            // Scan row-tracking maps to apply +10 points per completed line
+            for (int r = 0; r < GRID_ROWS; r++) {
+                if (rowsToClear[r]) {
+                    score += 10;
+                }
+            }
+            for (int c = 0; c < GRID_COLS; c++) {
+                if (colsToClear[c]) {
+                    score += 10;
+                }
             }
 
             for (int r = 0; r < GRID_ROWS; r++) {
