@@ -7,7 +7,6 @@ import java.awt.event.MouseMotionListener;
 public class GamePanel extends JPanel implements MouseListener, MouseMotionListener {
 
     private static final int CELL_SIZE = 50;
-    // --- NEW FOR VERSION 8: CELL SIZE FOR BLOCKS AT HALF THE AREA OF GRID CELLS (50x50/2 = 1250 -> sqrt ≈ 35) ---
     private static final int PREVIEW_CELL_SIZE = 35;
 
     private static final int GRID_ROWS = 8;
@@ -64,6 +63,9 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private int[][] activeBlock2;
     private int[][] activeBlock3;
 
+    // --- NEW FOR VERSION 9: SCORE TALLY VARIABLE ---
+    private int score = 0;
+
     public GamePanel() {
         addMouseListener(this);
         addMouseMotionListener(this);
@@ -94,6 +96,12 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
         blockHomeY = startY + gridHeight + 20;
 
+        // --- NEW FOR VERSION 9: DRAW SCORE INTERFACE ABOVE THE GRID ---
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 22));
+        // Placed 30 pixels above the grid starting Y point, aligned with the left edge of the grid
+        g.drawString("Score: " + score, startX, startY - 30);
+
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
                 int x = startX + col * CELL_SIZE;
@@ -111,8 +119,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // --- UPDATED FOR VERSION 8: Use CELL_SIZE if dragged, PREVIEW_CELL_SIZE if resting ---
-        // Block 1
         if (!blockPlaced[1]) {
             if (selectedBlock == 1) {
                 drawBlock(g, activeBlock1, dragX, dragY, CELL_SIZE);
@@ -121,7 +127,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // Block 2
         if (!blockPlaced[2]) {
             if (selectedBlock == 2) {
                 drawBlock(g, activeBlock2, dragX, dragY, CELL_SIZE);
@@ -130,7 +135,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // Block 3
         if (!blockPlaced[3]) {
             if (selectedBlock == 3) {
                 drawBlock(g, activeBlock3, dragX, dragY, CELL_SIZE);
@@ -140,7 +144,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         }
     }
 
-    // --- UPDATED FOR VERSION 8: Added size argument to control square rendering scale ---
     private void drawBlock(Graphics g, int[][] shape, int anchorX, int anchorY, int size) {
         for (int[] cell : shape) {
             int x = anchorX + cell[1] * size;
@@ -152,7 +155,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         }
     }
 
-    // --- UPDATED FOR VERSION 8: Added size argument to match the active visual dimensions ---
     private boolean isBlockClicked(int[][] shape, int anchorX, int anchorY, int mx, int my, int size) {
         for (int[] cell : shape) {
             int cellX = anchorX + cell[1] * size;
@@ -170,10 +172,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int mx = e.getX();
         int my = e.getY();
 
-        // --- UPDATED FOR VERSION 8: Check hits using PREVIEW_CELL_SIZE and anchor offsets to center on drag ---
         if (!blockPlaced[1] && isBlockClicked(activeBlock1, block1HomeX, blockHomeY, mx, my, PREVIEW_CELL_SIZE)) {
             selectedBlock = 1;
-            // Center tracking: offset calculations map to full size immediately to prevent off-center snapping
             mouseOffsetX = (mx - block1HomeX) * CELL_SIZE / PREVIEW_CELL_SIZE;
             mouseOffsetY = (my - blockHomeY) * CELL_SIZE / PREVIEW_CELL_SIZE;
         }
@@ -240,6 +240,9 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 int fillCol = targetCol + cell[1];
                 grid[fillRow][fillCol] = true;
             }
+
+            // --- NEW FOR VERSION 9: ACCRUE SCORE BASED ON CELL VECTOR SIZE ---
+            score += currentShape.length;
 
             blockPlaced[selectedBlock] = true;
 
