@@ -7,6 +7,9 @@ import java.awt.event.MouseMotionListener;
 public class GamePanel extends JPanel implements MouseListener, MouseMotionListener {
 
     private static final int CELL_SIZE = 50;
+    // --- NEW FOR VERSION 8: CELL SIZE FOR BLOCKS AT HALF THE AREA OF GRID CELLS (50x50/2 = 1250 -> sqrt ≈ 35) ---
+    private static final int PREVIEW_CELL_SIZE = 35;
+
     private static final int GRID_ROWS = 8;
     private static final int GRID_COLS = 8;
 
@@ -108,50 +111,54 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
+        // --- UPDATED FOR VERSION 8: Use CELL_SIZE if dragged, PREVIEW_CELL_SIZE if resting ---
+        // Block 1
         if (!blockPlaced[1]) {
             if (selectedBlock == 1) {
-                drawBlock(g, activeBlock1, dragX, dragY);
+                drawBlock(g, activeBlock1, dragX, dragY, CELL_SIZE);
             } else {
-                drawBlock(g, activeBlock1, block1HomeX, blockHomeY);
+                drawBlock(g, activeBlock1, block1HomeX, blockHomeY, PREVIEW_CELL_SIZE);
             }
         }
 
+        // Block 2
         if (!blockPlaced[2]) {
             if (selectedBlock == 2) {
-                drawBlock(g, activeBlock2, dragX, dragY);
+                drawBlock(g, activeBlock2, dragX, dragY, CELL_SIZE);
             } else {
-                drawBlock(g, activeBlock2, block2HomeX, blockHomeY);
+                drawBlock(g, activeBlock2, block2HomeX, blockHomeY, PREVIEW_CELL_SIZE);
             }
         }
 
+        // Block 3
         if (!blockPlaced[3]) {
             if (selectedBlock == 3) {
-                drawBlock(g, activeBlock3, dragX, dragY);
+                drawBlock(g, activeBlock3, dragX, dragY, CELL_SIZE);
             } else {
-                drawBlock(g, activeBlock3, block3HomeX, blockHomeY);
+                drawBlock(g, activeBlock3, block3HomeX, blockHomeY, PREVIEW_CELL_SIZE);
             }
         }
     }
 
-    private void drawBlock(Graphics g, int[][] shape, int anchorX, int anchorY) {
+    // --- UPDATED FOR VERSION 8: Added size argument to control square rendering scale ---
+    private void drawBlock(Graphics g, int[][] shape, int anchorX, int anchorY, int size) {
         for (int[] cell : shape) {
-            int x = anchorX + cell[1] * CELL_SIZE;
-            int y = anchorY + cell[0] * CELL_SIZE;
+            int x = anchorX + cell[1] * size;
+            int y = anchorY + cell[0] * size;
             g.setColor(Color.ORANGE);
-            g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+            g.fillRect(x, y, size, size);
             g.setColor(Color.BLACK);
-            g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
+            g.drawRect(x, y, size, size);
         }
     }
 
-    // --- NEW FOR VERSION 7: PRECISE PER-CELL CLICK HITBOX CHECKER ---
-    private boolean isBlockClicked(int[][] shape, int anchorX, int anchorY, int mx, int my) {
+    // --- UPDATED FOR VERSION 8: Added size argument to match the active visual dimensions ---
+    private boolean isBlockClicked(int[][] shape, int anchorX, int anchorY, int mx, int my, int size) {
         for (int[] cell : shape) {
-            int cellX = anchorX + cell[1] * CELL_SIZE;
-            int cellY = anchorY + cell[0] * CELL_SIZE;
+            int cellX = anchorX + cell[1] * size;
+            int cellY = anchorY + cell[0] * size;
 
-            // Check if mouse coordinates fall exactly within this individual cell boundary
-            if (mx >= cellX && mx < cellX + CELL_SIZE && my >= cellY && my < cellY + CELL_SIZE) {
+            if (mx >= cellX && mx < cellX + size && my >= cellY && my < cellY + size) {
                 return true;
             }
         }
@@ -163,21 +170,22 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int mx = e.getX();
         int my = e.getY();
 
-        // --- UPDATED FOR VERSION 7: Replaced rough grid boxes with strict shape checks ---
-        if (!blockPlaced[1] && isBlockClicked(activeBlock1, block1HomeX, blockHomeY, mx, my)) {
+        // --- UPDATED FOR VERSION 8: Check hits using PREVIEW_CELL_SIZE and anchor offsets to center on drag ---
+        if (!blockPlaced[1] && isBlockClicked(activeBlock1, block1HomeX, blockHomeY, mx, my, PREVIEW_CELL_SIZE)) {
             selectedBlock = 1;
-            mouseOffsetX = mx - block1HomeX;
-            mouseOffsetY = my - blockHomeY;
+            // Center tracking: offset calculations map to full size immediately to prevent off-center snapping
+            mouseOffsetX = (mx - block1HomeX) * CELL_SIZE / PREVIEW_CELL_SIZE;
+            mouseOffsetY = (my - blockHomeY) * CELL_SIZE / PREVIEW_CELL_SIZE;
         }
-        else if (!blockPlaced[2] && isBlockClicked(activeBlock2, block2HomeX, blockHomeY, mx, my)) {
+        else if (!blockPlaced[2] && isBlockClicked(activeBlock2, block2HomeX, blockHomeY, mx, my, PREVIEW_CELL_SIZE)) {
             selectedBlock = 2;
-            mouseOffsetX = mx - block2HomeX;
-            mouseOffsetY = my - blockHomeY;
+            mouseOffsetX = (mx - block2HomeX) * CELL_SIZE / PREVIEW_CELL_SIZE;
+            mouseOffsetY = (my - blockHomeY) * CELL_SIZE / PREVIEW_CELL_SIZE;
         }
-        else if (!blockPlaced[3] && isBlockClicked(activeBlock3, block3HomeX, blockHomeY, mx, my)) {
+        else if (!blockPlaced[3] && isBlockClicked(activeBlock3, block3HomeX, blockHomeY, mx, my, PREVIEW_CELL_SIZE)) {
             selectedBlock = 3;
-            mouseOffsetX = mx - block3HomeX;
-            mouseOffsetY = my - blockHomeY;
+            mouseOffsetX = (mx - block3HomeX) * CELL_SIZE / PREVIEW_CELL_SIZE;
+            mouseOffsetY = (my - blockHomeY) * CELL_SIZE / PREVIEW_CELL_SIZE;
         }
 
         if (selectedBlock != -1) {
