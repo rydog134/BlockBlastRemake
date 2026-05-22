@@ -10,34 +10,53 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private static final int GRID_ROWS = 8;
     private static final int GRID_COLS = 8;
 
-    // Static master blueprints
-    private static final int[][] BLOCK_1 = {{0,0}, {0,1}, {0,2}};         // horizontal line of 3
-    private static final int[][] BLOCK_2 = {{0,0}, {1,0}, {2,0}, {2,1}}; // L-shape
-    private static final int[][] BLOCK_3 = {{0,0}, {0,1}, {1,0}, {1,1}}; // 2x2 square
+    // 1-Square
+    private static final int[][] MONOMINO = {{0,0}};
 
-    // --- NEW FOR VERSION 5: SHAPE BLUEPRINT POOL ---
-    private static final int[][][] SHAPE_POOL = { BLOCK_1, BLOCK_2, BLOCK_3 };
+    // 2-Squares (Dominoes)
+    private static final int[][] DOMINO_H = {{0,0}, {0,1}};
+    private static final int[][] DOMINO_V = {{0,0}, {1,0}};
 
-    private boolean[][] grid = new boolean[GRID_ROWS][GRID_COLS]; // false = empty, true = filled
+    // 3-Squares (Originals & alternative orientations)
+    private static final int[][] BLOCK_1  = {{0,0}, {0,1}, {0,2}};
+    private static final int[][] TROMINO_V = {{0,0}, {1,0}, {2,0}};
+    private static final int[][] BLOCK_2  = {{0,0}, {1,0}, {2,0}, {2,1}};
 
-    // Default home anchors for the three preview blocks
+    // 4-Squares (Tetrominoes & orientations)
+    private static final int[][] BLOCK_3   = {{0,0}, {0,1}, {1,0}, {1,1}};
+    private static final int[][] TETRIS_I_V = {{0,0}, {1,0}, {2,0}, {3,0}};
+    private static final int[][] TETRIS_T   = {{0,0}, {0,1}, {0,2}, {1,1}};
+    private static final int[][] TETRIS_L   = {{0,0}, {1,0}, {2,0}, {0,1}};
+
+    // 5-Squares (Pentominoes)
+    private static final int[][] PENTO_I_H = {{0,0}, {0,1}, {0,2}, {0,3}, {0,4}};
+    private static final int[][] PENTO_U   = {{0,0}, {2,0}, {0,1}, {1,1}, {2,1}};
+    private static final int[][] PENTO_X   = {{1,0}, {0,1}, {1,1}, {2,1}, {1,2}};
+
+    private static final int[][][] SHAPE_POOL = {
+            MONOMINO,
+            DOMINO_H, DOMINO_V,
+            BLOCK_1, TROMINO_V, BLOCK_2,
+            BLOCK_3, TETRIS_I_V, TETRIS_T, TETRIS_L,
+            PENTO_I_H, PENTO_U, PENTO_X
+    };
+
+    private boolean[][] grid = new boolean[GRID_ROWS][GRID_COLS];
+
     private final int block1HomeX = 75;
     private final int block2HomeX = 250;
     private final int block3HomeX = 425;
-    private int blockHomeY; // Calculated dynamically based on grid position
+    private int blockHomeY;
 
-    // Dragging state
-    private int selectedBlock = -1; // -1 = none, 1 = activeBlock1, 2 = activeBlock2, 3 = activeBlock3
-    private int dragX = 0;          // Current X of mouse/drag anchor
-    private int dragY = 0;          // Current Y of mouse/drag anchor
+    private int selectedBlock = -1;
+    private int dragX = 0;
+    private int dragY = 0;
 
     private int mouseOffsetX = 0;
     private int mouseOffsetY = 0;
 
-    // Inventory State
     private boolean[] blockPlaced = new boolean[4];
 
-    // --- NEW FOR VERSION 5: ACTIVE INTERACTION SLOTS ---
     private int[][] activeBlock1;
     private int[][] activeBlock2;
     private int[][] activeBlock3;
@@ -45,11 +64,9 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     public GamePanel() {
         addMouseListener(this);
         addMouseMotionListener(this);
-        // --- NEW LOGIC: Generate the initial layout on startup ---
         randomizeBlocks();
     }
 
-    // --- NEW FOR VERSION 5: RANDOMIZATION HELPER METHOD ---
     private void randomizeBlocks() {
         int index1 = (int) (Math.random() * SHAPE_POOL.length);
         int index2 = (int) (Math.random() * SHAPE_POOL.length);
@@ -64,19 +81,16 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        // Draw blue background
         g.setColor(Color.BLUE);
         g.fillRect(0, 0, getWidth(), getHeight());
 
-        // Calculate top-left corner to centre the grid
-        int gridWidth = GRID_COLS * CELL_SIZE;   // 400px
-        int gridHeight = GRID_ROWS * CELL_SIZE;  // 400px
+        int gridWidth = GRID_COLS * CELL_SIZE;
+        int gridHeight = GRID_ROWS * CELL_SIZE;
         int startX = (getWidth() - gridWidth) / 2;
         int startY = (getHeight() - gridHeight) / 2;
 
         blockHomeY = startY + gridHeight + 20;
 
-        // Draw each cell of the grid
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
                 int x = startX + col * CELL_SIZE;
@@ -94,8 +108,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // --- NEW LOGIC: Render dynamic slots instead of hardcoded master shapes ---
-        // Block 1
         if (!blockPlaced[1]) {
             if (selectedBlock == 1) {
                 drawBlock(g, activeBlock1, dragX, dragY);
@@ -104,7 +116,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // Block 2
         if (!blockPlaced[2]) {
             if (selectedBlock == 2) {
                 drawBlock(g, activeBlock2, dragX, dragY);
@@ -113,7 +124,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // Block 3
         if (!blockPlaced[3]) {
             if (selectedBlock == 3) {
                 drawBlock(g, activeBlock3, dragX, dragY);
@@ -134,29 +144,37 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         }
     }
 
+    // --- NEW FOR VERSION 7: PRECISE PER-CELL CLICK HITBOX CHECKER ---
+    private boolean isBlockClicked(int[][] shape, int anchorX, int anchorY, int mx, int my) {
+        for (int[] cell : shape) {
+            int cellX = anchorX + cell[1] * CELL_SIZE;
+            int cellY = anchorY + cell[0] * CELL_SIZE;
+
+            // Check if mouse coordinates fall exactly within this individual cell boundary
+            if (mx >= cellX && mx < cellX + CELL_SIZE && my >= cellY && my < cellY + CELL_SIZE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void mousePressed(MouseEvent e) {
         int mx = e.getX();
         int my = e.getY();
 
-        // --- NEW LOGIC: Use generous 3x3 bounding boundaries to safely allow for random shape variations ---
-        // Check Slot 1
-        if (!blockPlaced[1] && mx >= block1HomeX && mx <= block1HomeX + (3 * CELL_SIZE) &&
-                my >= blockHomeY && my <= blockHomeY + (3 * CELL_SIZE)) {
+        // --- UPDATED FOR VERSION 7: Replaced rough grid boxes with strict shape checks ---
+        if (!blockPlaced[1] && isBlockClicked(activeBlock1, block1HomeX, blockHomeY, mx, my)) {
             selectedBlock = 1;
             mouseOffsetX = mx - block1HomeX;
             mouseOffsetY = my - blockHomeY;
         }
-        // Check Slot 2
-        else if (!blockPlaced[2] && mx >= block2HomeX && mx <= block2HomeX + (3 * CELL_SIZE) &&
-                my >= blockHomeY && my <= blockHomeY + (3 * CELL_SIZE)) {
+        else if (!blockPlaced[2] && isBlockClicked(activeBlock2, block2HomeX, blockHomeY, mx, my)) {
             selectedBlock = 2;
             mouseOffsetX = mx - block2HomeX;
             mouseOffsetY = my - blockHomeY;
         }
-        // Check Slot 3
-        else if (!blockPlaced[3] && mx >= block3HomeX && mx <= block3HomeX + (3 * CELL_SIZE) &&
-                my >= blockHomeY && my <= blockHomeY + (3 * CELL_SIZE)) {
+        else if (!blockPlaced[3] && isBlockClicked(activeBlock3, block3HomeX, blockHomeY, mx, my)) {
             selectedBlock = 3;
             mouseOffsetX = mx - block3HomeX;
             mouseOffsetY = my - blockHomeY;
@@ -187,7 +205,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int startX = (getWidth() - gridWidth) / 2;
         int startY = (getHeight() - gridHeight) / 2;
 
-        // --- NEW LOGIC: Target current dynamic active blocks ---
         int[][] currentShape = (selectedBlock == 1) ? activeBlock1 : (selectedBlock == 2) ? activeBlock2 : activeBlock3;
 
         int targetCol = Math.round((float) (dragX - startX) / CELL_SIZE);
@@ -218,7 +235,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
             blockPlaced[selectedBlock] = true;
 
-            // Line clearing matrix evaluations
             boolean[] rowsToClear = new boolean[GRID_ROWS];
             boolean[] colsToClear = new boolean[GRID_COLS];
 
@@ -252,13 +268,11 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 }
             }
 
-            // If all three blocks are used, regenerate them
             if (blockPlaced[1] && blockPlaced[2] && blockPlaced[3]) {
                 blockPlaced[1] = false;
                 blockPlaced[2] = false;
                 blockPlaced[3] = false;
 
-                // --- NEW LOGIC: Reroll random shapes from pool into interaction slots ---
                 randomizeBlocks();
             }
         }
