@@ -5,6 +5,7 @@ import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList; // --- NEW FOR VERSION 15: FOR MANAGING PARTICLE COLLECTIONS ---
 
 public class GamePanel extends JPanel implements MouseListener, MouseMotionListener {
 
@@ -88,8 +89,13 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
     private int[][] animSizes = new int[GRID_ROWS][GRID_COLS];
     private int[][] trailOpacities = new int[GRID_ROWS][GRID_COLS];
+    // --- NEW FOR VERSION 15: DELAY DECREMENT FLAGS TO SIMULATE OUTWARD TRAIL EXPANSION ---
+    private int[][] trailDelays = new int[GRID_ROWS][GRID_COLS];
     private Color[][] animColors = new Color[GRID_ROWS][GRID_COLS];
     private Timer animationTimer;
+
+    // --- NEW FOR VERSION 15: CONTAINER FOR LIVE GAMEPLAY PARTICLES ---
+    private ArrayList<Particle> particles = new ArrayList<>();
 
     public GamePanel() {
         addMouseListener(this);
@@ -99,6 +105,7 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     }
 
     private void setupAnimationEngine() {
+        // Runs every 30ms. Adjusted step decrements below achieve a crisp 0.5-second total lifetime loop.
         animationTimer = new Timer(30, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -106,16 +113,38 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
                 for (int r = 0; r < GRID_ROWS; r++) {
                     for (int c = 0; c < GRID_COLS; c++) {
+                        // 1. Double the Shrink Speed to finish within 0.5 seconds (-4 pixels per frame)
                         if (animSizes[r][c] > 0) {
-                            animSizes[r][c] -= 2;
+                            animSizes[r][c] -= 4;
                             if (animSizes[r][c] < 0) animSizes[r][c] = 0;
                             dynamicActive = true;
                         }
-                        if (trailOpacities[r][c] > 0) {
-                            trailOpacities[r][c] -= 10;
-                            if (trailOpacities[r][c] < 0) trailOpacities[r][c] = 0;
+
+                        // 2. Control Staggered Outward Trail Delays
+                        if (trailDelays[r][c] > 0) {
+                            trailDelays[r][c] -= 30; // Reduce delay countdown
                             dynamicActive = true;
+                        } else {
+                            // Run fade only when delay counter reaches 0
+                            if (trailOpacities[r][c] > 0) {
+                                trailOpacities[r][c] -= 16; // Faster trail fade (-16 per frame)
+                                if (trailOpacities[r][c] < 0) trailOpacities[r][c] = 0;
+                                dynamicActive = true;
+                            }
                         }
+                    }
+                }
+
+                // --- NEW FOR VERSION 15: UPDATE VELOCITY POSITIONS AND FADE ACTIVE PARTICLES ---
+                for (int i = particles.size() - 1; i >= 0; i--) {
+                    Particle p = particles.get(i);
+                    p.x += p.dx;
+                    p.y += p.dy;
+                    p.opacity -= 16; // Fade out matching the speed of our line trail
+                    if (p.opacity <= 0) {
+                        particles.remove(i);
+                    } else {
+                        dynamicActive = true;
                     }
                 }
 
@@ -201,8 +230,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                     g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
                 }
                 else if (animSizes[row][col] > 0) {
-                    // --- UPDATED FOR VERSION 14b: PREVENT THE STAGGERED SIZE VALUES FROM SPILLING OVER ---
-                    // While a cell's tracked size value is > 50, it is waiting its turn to cascade. Cap the rendered size at 50.
                     int size = Math.min(animSizes[row][col], CELL_SIZE);
                     int offset = (CELL_SIZE - size) / 2;
                     g.setColor(animColors[row][col]);
@@ -211,11 +238,18 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                     g.drawRect(x + offset, y + offset, size, size);
                 }
 
-                if (trailOpacities[row][col] > 0) {
+                // Render Expanding Trail Layers only when individual coordinate start delays hit 0
+                if (trailDelays[row][col] <= 0 && trailOpacities[row][col] > 0) {
                     g.setColor(new Color(173, 216, 230, trailOpacities[row][col]));
                     g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
                 }
             }
+        }
+
+        // --- NEW FOR VERSION 15: ITERATE AND RENDERING FLOATING SHATTER PARTICLES ---
+        for (Particle p : particles) {
+            g.setColor(new Color(p.color.getRed(), p.color.getGreen(), p.color.getBlue(), p.opacity));
+            g.fillRect((int)p.x, (int)p.y, p.size, p.size);
         }
 
         if (!blockPlaced[1]) {
@@ -307,8 +341,11 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                         grid[r][c] = null;
                         animSizes[r][c] = 0;
                         trailOpacities[r][c] = 0;
+                        trailDelays[r][c] = 0;
                     }
                 }
+                // Clear leftovers
+                particles.clear();
 
                 randomizeBlocks();
                 gameOver = false;
@@ -450,13 +487,46 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             for (int r = 0; r < GRID_ROWS; r++) {
                 for (int c = 0; c < GRID_COLS; c++) {
                     if (rowsToClear[r] || colsToClear[c]) {
-                        animColors[r][c] = grid[r][c];
-                        trailOpacities[r][c] = 230;
+                        Color originalColor = grid[r][c];
+                        animColors[r][c] = originalColor;
+                        trailOpacities[r][c] = 240;
 
-                        // --- UPDATED FOR VERSION 14b: CALCULATE INDEX STAGGER TIMING ---
-                        // Row clears prioritize column index (left-to-right). Column clears prioritize row index (top-to-bottom).
+                        // Calculate index position differences relative to the line midpoints (between 3 and 4)
+                        double distFromCenter = rowsToClear[r] ? Math.abs(c - 3.5) : Math.abs(r - 3.5);
+
+                        // --- UPDATED FOR VERSION 15: OUTWARD TIMING DELAYS & 0.5S SPEED SCALARS ---
+                        // Closer to center = lower delay = appears first. (staggered by 45ms per block distance step)
+                        trailDelays[r][c] = (int)(distFromCenter * 45);
+
+                        // Shrink speed helper variables: add +10px buffer per step to maintain sequential block shrinking
                         int indexOffset = rowsToClear[r] ? c : r;
-                        animSizes[r][c] = CELL_SIZE + (indexOffset * 6); // Add +6px buffer delay per sequential step
+                        animSizes[r][c] = CELL_SIZE + (indexOffset * 10);
+
+                        // --- NEW FOR VERSION 15: SPAWN SHATTER PARTICLES MATCHING EXPANDING TRAILS ---
+                        int cellCenterX = startX + (c * CELL_SIZE) + (CELL_SIZE / 2);
+                        int cellCenterY = startY + (r * CELL_SIZE) + (CELL_SIZE / 2);
+
+                        // Spawn 3 particles per cleared cell coordinate square
+                        for (int k = 0; k < 3; k++) {
+                            Particle p = new Particle();
+                            // Jitter initial spawn slightly within cell bounds
+                            p.x = cellCenterX + (Math.random() * 20 - 10);
+                            p.y = cellCenterY + (Math.random() * 20 - 10);
+                            p.size = (int)(Math.random() * 8) + 2; // Random sizes strictly < 10 (range: 2 to 9)
+                            p.color = originalColor != null ? originalColor : Color.WHITE;
+
+                            // Calculate thrust velocity vectors pushing along the active clearing paths
+                            if (rowsToClear[r]) {
+                                // Push left or right depending on side of center point
+                                p.dx = (c >= 4) ? (Math.random() * 4 + 2) : -(Math.random() * 4 + 2);
+                                p.dy = Math.random() * 4 - 2; // Light vertical drift
+                            } else {
+                                // Push up or down depending on side of center point
+                                p.dx = Math.random() * 4 - 2; // Light horizontal drift
+                                p.dy = (r >= 4) ? (Math.random() * 4 + 2) : -(Math.random() * 4 + 2);
+                            }
+                            particles.add(p);
+                        }
 
                         grid[r][c] = null;
                     }
@@ -486,4 +556,13 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     @Override public void mouseClicked(MouseEvent e) {}
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseExited(MouseEvent e) {}
+}
+
+// --- NEW FOR VERSION 15: PARTICLE BEHAVIOR DATA STRUCTURE ---
+class Particle {
+    double x, y;       // Precise position coordinates
+    double dx, dy;     // Velocity vectors (pixels per tick)
+    int size;          // Bounds constraints (<10)
+    int opacity = 240; // Alpha channel intensity tracker
+    Color color;       // Extracted tile color configuration
 }
