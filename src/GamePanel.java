@@ -43,14 +43,10 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             PENTO_I_H, PENTO_U, PENTO_X
     };
 
-    // --- NEW FOR VERSION 11: STATIC CHOSEN PALETTE ARRAY ---
-    // Cyan is used for blue to visually contrast clearly against the window's solid blue background
     private static final Color[] COLOR_PALETTE = {
             Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.CYAN, Color.MAGENTA, Color.PINK
     };
 
-    // --- UPDATED FOR VERSION 11: BOOLEAN CONVERTED TO COLOR INSTANCE MATRIX ---
-    // null = empty cell, non-null Color object = filled cell holding that specific color
     private Color[][] grid = new Color[GRID_ROWS][GRID_COLS];
 
     private final int block1HomeX = 75;
@@ -71,12 +67,20 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private int[][] activeBlock2;
     private int[][] activeBlock3;
 
-    // --- NEW FOR VERSION 11: TRACKING STORAGE FOR RANDOMLY ASSIGNED SLOT COLORS ---
     private Color colorBlock1;
     private Color colorBlock2;
     private Color colorBlock3;
 
     private int score = 0;
+
+    // --- NEW FOR VERSION 12: GAME STATE OVER TRACKER ---
+    private boolean gameOver = false;
+
+    // --- NEW FOR VERSION 12: RESETABLE BUTTON LAYOUT CONFIGURATIONS ---
+    private final int buttonX = 225;
+    private final int buttonY = 450;
+    private final int buttonWidth = 150;
+    private final int buttonHeight = 50;
 
     public GamePanel() {
         addMouseListener(this);
@@ -93,10 +97,42 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         activeBlock2 = SHAPE_POOL[index2];
         activeBlock3 = SHAPE_POOL[index3];
 
-        // --- NEW FOR VERSION 11: CHOOSE AND RETAIN INDEPENDENT RANDOM COLORS ---
         colorBlock1 = COLOR_PALETTE[(int) (Math.random() * COLOR_PALETTE.length)];
         colorBlock2 = COLOR_PALETTE[(int) (Math.random() * COLOR_PALETTE.length)];
         colorBlock3 = COLOR_PALETTE[(int) (Math.random() * COLOR_PALETTE.length)];
+    }
+
+    // --- NEW FOR VERSION 12: SIMULATE INDIVIDUAL COORDINATE FIT SAFETY ---
+    private boolean canShapeFitAt(int[][] shape, int startRow, int startCol) {
+        for (int[] cell : shape) {
+            int checkRow = startRow + cell[0];
+            int checkCol = startCol + cell[1];
+
+            // Verify if out of matrix boundary boundaries
+            if (checkRow < 0 || checkRow >= GRID_ROWS || checkCol < 0 || checkCol >= GRID_COLS) {
+                return false;
+            }
+            // Verify if space contains color references already
+            if (grid[checkRow][checkCol] != null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // --- NEW FOR VERSION 12: EXHAUSTIVE BOARD FITNESS ANALYSIS LOOPS ---
+    private void checkGameOver() {
+        // Iterate every square on our grid
+        for (int row = 0; row < GRID_ROWS; row++) {
+            for (int col = 0; col < GRID_COLS; col++) {
+                // Scan any remaining unplaced blocks
+                if (!blockPlaced[1] && canShapeFitAt(activeBlock1, row, col)) return;
+                if (!blockPlaced[2] && canShapeFitAt(activeBlock2, row, col)) return;
+                if (!blockPlaced[3] && canShapeFitAt(activeBlock3, row, col)) return;
+            }
+        }
+        // No valid moves remain for any of the active items
+        gameOver = true;
     }
 
     @Override
@@ -117,14 +153,13 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         g.setFont(new Font("Arial", Font.BOLD, 22));
         g.drawString("Score: " + score, startX, startY - 30);
 
-        // --- UPDATED FOR VERSION 11: READ COLOR OBJECT FROM GRID CELL OR RENDER WHITE ---
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
                 int x = startX + col * CELL_SIZE;
                 int y = startY + row * CELL_SIZE;
 
                 if (grid[row][col] != null) {
-                    g.setColor(grid[row][col]); // Use the exact color object stored in this cell
+                    g.setColor(grid[row][col]);
                     g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
                     g.setColor(Color.BLACK);
                     g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
@@ -135,7 +170,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // --- UPDATED FOR VERSION 11: PASS SLOT SPECIFIC COLOR VALUES TO DRAWBLOCK ---
         if (!blockPlaced[1]) {
             if (selectedBlock == 1) {
                 drawBlock(g, activeBlock1, dragX, dragY, CELL_SIZE, colorBlock1);
@@ -159,14 +193,37 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 drawBlock(g, activeBlock3, block3HomeX, blockHomeY, PREVIEW_CELL_SIZE, colorBlock3);
             }
         }
+
+        // --- NEW FOR VERSION 12: RENDER SEMI-TRANSPARENT SCREEN OVERLAY ON GAME OVER ---
+        if (gameOver) {
+            // Darkened backing fill (black color with an alpha transparency value of 180)
+            g.setColor(new Color(0, 0, 0, 180));
+            g.fillRect(0, 0, getWidth(), getHeight());
+
+            // Render prominent score lines
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.BOLD, 42));
+            g.drawString("Game Over", 190, 320);
+
+            g.setFont(new Font("Arial", Font.BOLD, 28));
+            g.drawString("Final Score: " + score, 205, 380);
+
+            // Draw interactive Green Restart Button box
+            g.setColor(Color.GREEN);
+            g.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+            g.setColor(Color.BLACK);
+            g.drawRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            g.setFont(new Font("Arial", Font.BOLD, 22));
+            g.drawString("Play Again", buttonX + 22, buttonY + 32);
+        }
     }
 
-    // --- UPDATED FOR VERSION 11: ADDED DYNAMIC COLOR ARGUMENT ---
     private void drawBlock(Graphics g, int[][] shape, int anchorX, int anchorY, int size, Color blockColor) {
         for (int[] cell : shape) {
             int x = anchorX + cell[1] * size;
             int y = anchorY + cell[0] * size;
-            g.setColor(blockColor); // Render with assigned custom palette color instead of forced orange
+            g.setColor(blockColor);
             g.fillRect(x, y, size, size);
             g.setColor(Color.BLACK);
             g.drawRect(x, y, size, size);
@@ -189,6 +246,30 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     public void mousePressed(MouseEvent e) {
         int mx = e.getX();
         int my = e.getY();
+
+        // --- UPDATED FOR VERSION 12: RESTART INTERACTION MANAGER ---
+        if (gameOver) {
+            // Verify button perimeter clicks
+            if (mx >= buttonX && mx <= buttonX + buttonWidth && my >= buttonY && my <= buttonY + buttonHeight) {
+                // Clear state memory
+                score = 0;
+                blockPlaced[1] = false;
+                blockPlaced[2] = false;
+                blockPlaced[3] = false;
+
+                // Clear grid layout entries
+                for (int r = 0; r < GRID_ROWS; r++) {
+                    for (int c = 0; c < GRID_COLS; c++) {
+                        grid[r][c] = null;
+                    }
+                }
+
+                randomizeBlocks();
+                gameOver = false; // Turn off screen block flags
+                repaint();
+            }
+            return; // Fully interrupt any active dragging behaviors if screen is locked
+        }
 
         if (!blockPlaced[1] && isBlockClicked(activeBlock1, block1HomeX, blockHomeY, mx, my, PREVIEW_CELL_SIZE)) {
             selectedBlock = 1;
@@ -232,7 +313,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int startY = (getHeight() - gridHeight) / 2;
 
         int[][] currentShape = (selectedBlock == 1) ? activeBlock1 : (selectedBlock == 2) ? activeBlock2 : activeBlock3;
-        // --- NEW FOR VERSION 11: GET THE RELEVANT ACTIVE SLOT COLOR VALUE ---
         Color currentBlockColor = (selectedBlock == 1) ? colorBlock1 : (selectedBlock == 2) ? colorBlock2 : colorBlock3;
 
         int targetCol = Math.round((float) (dragX - startX) / CELL_SIZE);
@@ -248,7 +328,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 canPlace = false;
                 break;
             }
-            // --- UPDATED FOR VERSION 11: CHECK IF CELL IS FILLED BY COMPARING TO NULL ---
             if (grid[checkRow][checkCol] != null) {
                 canPlace = false;
                 break;
@@ -259,7 +338,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             for (int[] cell : currentShape) {
                 int fillRow = targetRow + cell[0];
                 int fillCol = targetCol + cell[1];
-                // --- UPDATED FOR VERSION 11: SAVE COLOR OBJECT INTO CELL RATHER THAN TRUE ---
                 grid[fillRow][fillCol] = currentBlockColor;
             }
 
@@ -273,7 +351,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             for (int r = 0; r < GRID_ROWS; r++) {
                 boolean rowFull = true;
                 for (int c = 0; c < GRID_COLS; c++) {
-                    // --- UPDATED FOR VERSION 11: CHECK FOR HOLES COMPARING TO NULL ---
                     if (grid[r][c] == null) {
                         rowFull = false;
                         break;
@@ -285,7 +362,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             for (int c = 0; c < GRID_COLS; c++) {
                 boolean colFull = true;
                 for (int r = 0; r < GRID_ROWS; r++) {
-                    // --- UPDATED FOR VERSION 11: CHECK FOR HOLES COMPARING TO NULL ---
                     if (grid[r][c] == null) {
                         colFull = false;
                         break;
@@ -308,7 +384,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             for (int r = 0; r < GRID_ROWS; r++) {
                 for (int c = 0; c < GRID_COLS; c++) {
                     if (rowsToClear[r] || colsToClear[c]) {
-                        // --- UPDATED FOR VERSION 11: CLEAR CELL CODES BACK TO NULL ---
                         grid[r][c] = null;
                     }
                 }
@@ -321,6 +396,9 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
                 randomizeBlocks();
             }
+
+            // --- NEW FOR VERSION 12: EXECUTE MOVEMENT EXHAUSTION ANALYSIS ---
+            checkGameOver();
         }
 
         selectedBlock = -1;
