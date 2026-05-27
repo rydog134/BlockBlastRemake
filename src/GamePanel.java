@@ -110,7 +110,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
                 for (int r = 0; r < GRID_ROWS; r++) {
                     for (int c = 0; c < GRID_COLS; c++) {
-                        // Blocks keep their fast shrink speed to disappear first
                         if (animSizes[r][c] > 0) {
                             animSizes[r][c] -= 4;
                             if (animSizes[r][c] < 0) animSizes[r][c] = 0;
@@ -122,8 +121,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                             dynamicActive = true;
                         } else {
                             if (trailOpacities[r][c] > 0) {
-                                // --- UPDATED FOR CLEANER TIMING: REDUCED FADE SPEED FROM -16 TO -8 ---
-                                // Slower subtraction means the blue trail hangs on screen longer than blocks
                                 trailOpacities[r][c] -= 8;
                                 if (trailOpacities[r][c] < 0) trailOpacities[r][c] = 0;
                                 dynamicActive = true;
@@ -136,8 +133,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                     Particle p = particles.get(i);
                     p.x += p.dx;
                     p.y += p.dy;
-                    // --- UPDATED FOR CLEANER TIMING: REDUCED PARTICLE FADE SPEED FROM -16 TO -8 ---
-                    // Particles now fade away at the exact same rate as the lingering trail
                     p.opacity -= 8;
                     if (p.opacity <= 0) {
                         particles.remove(i);
@@ -199,7 +194,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        g.setColor(Color.BLUE);
+        // --- UPDATED FOR CLEANER TIMING: DARKER APP BACKGROUND BLUE COLOR ---
+        g.setColor(new Color(15, 25, 65)); // Deep midnight indigo canvas
         g.fillRect(0, 0, getWidth(), getHeight());
 
         int gridWidth = GRID_COLS * CELL_SIZE;
@@ -208,6 +204,17 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int startY = (getHeight() - gridHeight) / 2;
 
         blockHomeY = startY + gridHeight + 20;
+
+        // --- NEW FOR DEPTH LAYERING: SOLID GRAY GRID BACKGROUND SURFACE ---
+        g.setColor(new Color(195, 195, 195)); // Light gray container base
+        g.fillRect(startX, startY, gridWidth, gridHeight);
+
+        // --- NEW FOR DEPTH LAYERING: 5PX INSIDE OFFSET DARKER SHADE GRAY BORDER ---
+        g.setColor(new Color(145, 145, 145)); // Bevel frame shade
+        for (int i = 0; i < 5; i++) {
+            // Draws overlapping rectangles stepping inward by 1 pixel each pass
+            g.drawRect(startX + i, startY + i, gridWidth - (2 * i), gridHeight - (2 * i));
+        }
 
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 22));
@@ -218,7 +225,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 int x = startX + col * CELL_SIZE;
                 int y = startY + row * CELL_SIZE;
 
-                g.setColor(Color.WHITE);
+                // Replaced previous white grid box border with a subtle gray layout guide
+                g.setColor(new Color(215, 215, 215));
                 g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
 
                 if (grid[row][col] != null) {
@@ -483,7 +491,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 for (int c = 0; c < GRID_COLS; c++) {
                     if (rowsToClear[r] || colsToClear[c]) {
                         animColors[r][c] = grid[r][c];
-                        // --- UPDATED: TRAIL OPACITY ENHANCED TO 255 (MAX VIVIDNESS) ---
                         trailOpacities[r][c] = 255;
 
                         double distFromCenter = rowsToClear[r] ? Math.abs(c - 3.5) : Math.abs(r - 3.5);
@@ -500,7 +507,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                             p.x = cellCenterX + (Math.random() * 20 - 10);
                             p.y = cellCenterY + (Math.random() * 20 - 10);
                             p.size = (int)(Math.random() * 8) + 2;
-                            // --- UPDATED: FORCE ALL SEPARATE SPARKLE ITEMS TO BE SOLID CYAN ---
                             p.color = Color.CYAN;
 
                             if (rowsToClear[r]) {
@@ -547,6 +553,6 @@ class Particle {
     double x, y;
     double dx, dy;
     int size;
-    int opacity = 255; // Updated to match max starting opacity
+    int opacity = 255;
     Color color;
 }
