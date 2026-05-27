@@ -73,10 +73,13 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
     private int score = 0;
 
-    // --- NEW FOR VERSION 12: GAME STATE OVER TRACKER ---
+    // --- NEW FOR VERSION 13: MULTIPLIER COMBO TRACKING FIELDS ---
+    private int multiplier = 1;
+    private int movesSinceLastClear = 0;
+    private int rowsClearedInWindow = 0;
+
     private boolean gameOver = false;
 
-    // --- NEW FOR VERSION 12: RESETABLE BUTTON LAYOUT CONFIGURATIONS ---
     private final int buttonX = 225;
     private final int buttonY = 450;
     private final int buttonWidth = 150;
@@ -102,17 +105,14 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         colorBlock3 = COLOR_PALETTE[(int) (Math.random() * COLOR_PALETTE.length)];
     }
 
-    // --- NEW FOR VERSION 12: SIMULATE INDIVIDUAL COORDINATE FIT SAFETY ---
     private boolean canShapeFitAt(int[][] shape, int startRow, int startCol) {
         for (int[] cell : shape) {
             int checkRow = startRow + cell[0];
             int checkCol = startCol + cell[1];
 
-            // Verify if out of matrix boundary boundaries
             if (checkRow < 0 || checkRow >= GRID_ROWS || checkCol < 0 || checkCol >= GRID_COLS) {
                 return false;
             }
-            // Verify if space contains color references already
             if (grid[checkRow][checkCol] != null) {
                 return false;
             }
@@ -120,18 +120,14 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         return true;
     }
 
-    // --- NEW FOR VERSION 12: EXHAUSTIVE BOARD FITNESS ANALYSIS LOOPS ---
     private void checkGameOver() {
-        // Iterate every square on our grid
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
-                // Scan any remaining unplaced blocks
                 if (!blockPlaced[1] && canShapeFitAt(activeBlock1, row, col)) return;
                 if (!blockPlaced[2] && canShapeFitAt(activeBlock2, row, col)) return;
                 if (!blockPlaced[3] && canShapeFitAt(activeBlock3, row, col)) return;
             }
         }
-        // No valid moves remain for any of the active items
         gameOver = true;
     }
 
@@ -151,7 +147,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 22));
-        g.drawString("Score: " + score, startX, startY - 30);
+        // --- UPDATED FOR VERSION 13: DISPLAY ACTIVE MULTIPLIER ---
+        g.drawString("Score: " + score + "  (x" + multiplier + ")", startX, startY - 30);
 
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
@@ -194,13 +191,10 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // --- NEW FOR VERSION 12: RENDER SEMI-TRANSPARENT SCREEN OVERLAY ON GAME OVER ---
         if (gameOver) {
-            // Darkened backing fill (black color with an alpha transparency value of 180)
             g.setColor(new Color(0, 0, 0, 180));
             g.fillRect(0, 0, getWidth(), getHeight());
 
-            // Render prominent score lines
             g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 42));
             g.drawString("Game Over", 190, 320);
@@ -208,7 +202,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             g.setFont(new Font("Arial", Font.BOLD, 28));
             g.drawString("Final Score: " + score, 205, 380);
 
-            // Draw interactive Green Restart Button box
             g.setColor(Color.GREEN);
             g.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
@@ -247,17 +240,18 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int mx = e.getX();
         int my = e.getY();
 
-        // --- UPDATED FOR VERSION 12: RESTART INTERACTION MANAGER ---
         if (gameOver) {
-            // Verify button perimeter clicks
             if (mx >= buttonX && mx <= buttonX + buttonWidth && my >= buttonY && my <= buttonY + buttonHeight) {
-                // Clear state memory
                 score = 0;
+                // --- NEW FOR VERSION 13: RESET COMBO PARAMETERS ON RESTART ---
+                multiplier = 1;
+                movesSinceLastClear = 0;
+                rowsClearedInWindow = 0;
+
                 blockPlaced[1] = false;
                 blockPlaced[2] = false;
                 blockPlaced[3] = false;
 
-                // Clear grid layout entries
                 for (int r = 0; r < GRID_ROWS; r++) {
                     for (int c = 0; c < GRID_COLS; c++) {
                         grid[r][c] = null;
@@ -265,10 +259,10 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 }
 
                 randomizeBlocks();
-                gameOver = false; // Turn off screen block flags
+                gameOver = false;
                 repaint();
             }
-            return; // Fully interrupt any active dragging behaviors if screen is locked
+            return;
         }
 
         if (!blockPlaced[1] && isBlockClicked(activeBlock1, block1HomeX, blockHomeY, mx, my, PREVIEW_CELL_SIZE)) {
@@ -341,7 +335,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 grid[fillRow][fillCol] = currentBlockColor;
             }
 
-            score += currentShape.length;
+            // --- UPDATED FOR VERSION 13: COLLECT TURN POINTS INSTEAD OF INCREMENTING GLOBAL SCORE DIRECTLY ---
+            int pointsGainedThisTurn = currentShape.length;
 
             blockPlaced[selectedBlock] = true;
 
@@ -370,16 +365,41 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 if (colFull) colsToClear[c] = true;
             }
 
+            // --- UPDATED FOR VERSION 13: ACCRUE UNMULTIPLIED POINTS AND COUNT CLEARED LINES ---
+            int clearedLinesThisTurn = 0;
             for (int r = 0; r < GRID_ROWS; r++) {
                 if (rowsToClear[r]) {
-                    score += 10;
+                    pointsGainedThisTurn += 10;
+                    clearedLinesThisTurn++;
                 }
             }
             for (int c = 0; c < GRID_COLS; c++) {
                 if (colsToClear[c]) {
-                    score += 10;
+                    pointsGainedThisTurn += 10;
+                    clearedLinesThisTurn++;
                 }
             }
+
+            // --- NEW FOR VERSION 13: ENFORCE MULTIPLIER AND WINDOW TALLY CONDITIONALS ---
+            if (clearedLinesThisTurn > 0) {
+                rowsClearedInWindow += clearedLinesThisTurn;
+                movesSinceLastClear = 0; // Clear just occurred, reset counter
+
+                // If threshold of 2 lines within the 3-move window is met
+                if (rowsClearedInWindow >= 2) {
+                    multiplier += clearedLinesThisTurn;
+                }
+            } else {
+                movesSinceLastClear++;
+                // If 3 sequential non-clearing turns occur, break combo tracking parameters back to base
+                if (movesSinceLastClear >= 3) {
+                    multiplier = 1;
+                    rowsClearedInWindow = 0;
+                }
+            }
+
+            // Apply calculated current turn multiplier score safely
+            score += pointsGainedThisTurn * multiplier;
 
             for (int r = 0; r < GRID_ROWS; r++) {
                 for (int c = 0; c < GRID_COLS; c++) {
@@ -397,7 +417,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 randomizeBlocks();
             }
 
-            // --- NEW FOR VERSION 12: EXECUTE MOVEMENT EXHAUSTION ANALYSIS ---
             checkGameOver();
         }
 
