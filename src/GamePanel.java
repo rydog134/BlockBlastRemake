@@ -3,6 +3,8 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 public class GamePanel extends JPanel implements MouseListener, MouseMotionListener {
 
@@ -73,7 +75,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
     private int score = 0;
 
-    // --- NEW FOR VERSION 13: MULTIPLIER COMBO TRACKING FIELDS ---
     private int multiplier = 1;
     private int movesSinceLastClear = 0;
     private int rowsClearedInWindow = 0;
@@ -85,10 +86,51 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private final int buttonWidth = 150;
     private final int buttonHeight = 50;
 
+    // --- NEW FOR VERSION 14: ANIMATION STATE TRACKING MATRICES ---
+    private int[][] animSizes = new int[GRID_ROWS][GRID_COLS];
+    private int[][] trailOpacities = new int[GRID_ROWS][GRID_COLS];
+    private Color[][] animColors = new Color[GRID_ROWS][GRID_COLS]; // Saves block color during shrink
+    private Timer animationTimer;
+
     public GamePanel() {
         addMouseListener(this);
         addMouseMotionListener(this);
         randomizeBlocks();
+        setupAnimationEngine(); // Initialize our smooth continuous screen transition loop
+    }
+
+    // --- NEW FOR VERSION 14: ENERGIZE CONTROLLER ANIMATION LOOP ---
+    private void setupAnimationEngine() {
+        // Runs roughly 33 times per second (30ms interval). Perfectly readable for an AP CSA student.
+        animationTimer = new Timer(30, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                boolean dynamicActive = false;
+
+                for (int r = 0; r < GRID_ROWS; r++) {
+                    for (int c = 0; c < GRID_COLS; c++) {
+                        // 1. Process Shrink Logic
+                        if (animSizes[r][c] > 0) {
+                            animSizes[r][c] -= 2; // Gradually reduce cell dimensions by 2 pixels per frame
+                            if (animSizes[r][c] < 0) animSizes[r][c] = 0;
+                            dynamicActive = true;
+                        }
+                        // 2. Process Trail Fade Logic
+                        if (trailOpacities[r][c] > 0) {
+                            trailOpacities[r][c] -= 10; // Gradually decrease light blue alpha values
+                            if (trailOpacities[r][c] < 0) trailOpacities[r][c] = 0;
+                            dynamicActive = true;
+                        }
+                    }
+                }
+
+                if (dynamicActive) {
+                    repaint(); // Re-render if animations are running
+                } else {
+                    animationTimer.stop(); // Turn off timer when inactive to optimize CPU performance
+                }
+            }
+        });
     }
 
     private void randomizeBlocks() {
@@ -147,7 +189,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 22));
-        // --- UPDATED FOR VERSION 13: DISPLAY ACTIVE MULTIPLIER ---
         g.drawString("Score: " + score + "  (x" + multiplier + ")", startX, startY - 30);
 
         for (int row = 0; row < GRID_ROWS; row++) {
@@ -155,14 +196,33 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 int x = startX + col * CELL_SIZE;
                 int y = startY + row * CELL_SIZE;
 
+                // Draw Base Empty Square Container
+                g.setColor(Color.WHITE);
+                g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
+
                 if (grid[row][col] != null) {
+                    // Render standard resting block
                     g.setColor(grid[row][col]);
                     g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
                     g.setColor(Color.BLACK);
                     g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
-                } else {
-                    g.setColor(Color.WHITE);
-                    g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
+                }
+                // --- NEW FOR VERSION 14: RENDER ANIMATING DISAPPEARANCE LAYER ---
+                else if (animSizes[row][col] > 0) {
+                    int size = animSizes[row][col];
+                    // Center the shrinking block within the 50x50 cell space
+                    int offset = (CELL_SIZE - size) / 2;
+                    g.setColor(animColors[row][col]);
+                    g.fillRect(x + offset, y + offset, size, size);
+                    g.setColor(Color.BLACK);
+                    g.drawRect(x + offset, y + offset, size, size);
+                }
+
+                // --- NEW FOR VERSION 14: RENDER LIGHT BLUE FADING TRAILS OVER CELLS ---
+                if (trailOpacities[row][col] > 0) {
+                    // Light blue base (173, 216, 230) configured with dynamic alpha transparency
+                    g.setColor(new Color(173, 216, 230, trailOpacities[row][col]));
+                    g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
                 }
             }
         }
@@ -243,7 +303,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         if (gameOver) {
             if (mx >= buttonX && mx <= buttonX + buttonWidth && my >= buttonY && my <= buttonY + buttonHeight) {
                 score = 0;
-                // --- NEW FOR VERSION 13: RESET COMBO PARAMETERS ON RESTART ---
                 multiplier = 1;
                 movesSinceLastClear = 0;
                 rowsClearedInWindow = 0;
@@ -255,6 +314,9 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 for (int r = 0; r < GRID_ROWS; r++) {
                     for (int c = 0; c < GRID_COLS; c++) {
                         grid[r][c] = null;
+                        // --- NEW FOR VERSION 14: RESET ANIMATION MATRICES ON RESTART ---
+                        animSizes[r][c] = 0;
+                        trailOpacities[r][c] = 0;
                     }
                 }
 
@@ -335,7 +397,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 grid[fillRow][fillCol] = currentBlockColor;
             }
 
-            // --- UPDATED FOR VERSION 13: COLLECT TURN POINTS INSTEAD OF INCREMENTING GLOBAL SCORE DIRECTLY ---
             int pointsGainedThisTurn = currentShape.length;
 
             blockPlaced[selectedBlock] = true;
@@ -365,7 +426,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 if (colFull) colsToClear[c] = true;
             }
 
-            // --- UPDATED FOR VERSION 13: ACCRUE UNMULTIPLIED POINTS AND COUNT CLEARED LINES ---
             int clearedLinesThisTurn = 0;
             for (int r = 0; r < GRID_ROWS; r++) {
                 if (rowsToClear[r]) {
@@ -380,33 +440,40 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 }
             }
 
-            // --- NEW FOR VERSION 13: ENFORCE MULTIPLIER AND WINDOW TALLY CONDITIONALS ---
             if (clearedLinesThisTurn > 0) {
                 rowsClearedInWindow += clearedLinesThisTurn;
-                movesSinceLastClear = 0; // Clear just occurred, reset counter
+                movesSinceLastClear = 0;
 
-                // If threshold of 2 lines within the 3-move window is met
                 if (rowsClearedInWindow >= 2) {
                     multiplier += clearedLinesThisTurn;
                 }
             } else {
                 movesSinceLastClear++;
-                // If 3 sequential non-clearing turns occur, break combo tracking parameters back to base
                 if (movesSinceLastClear >= 3) {
                     multiplier = 1;
                     rowsClearedInWindow = 0;
                 }
             }
 
-            // Apply calculated current turn multiplier score safely
             score += pointsGainedThisTurn * multiplier;
 
+            // --- NEW FOR VERSION 14: PRIME TRANSITION MATRICES PRIOR TO REMOVAL ---
             for (int r = 0; r < GRID_ROWS; r++) {
                 for (int c = 0; c < GRID_COLS; c++) {
                     if (rowsToClear[r] || colsToClear[c]) {
-                        grid[r][c] = null;
+                        // Capture color identity and set max animation properties
+                        animColors[r][c] = grid[r][c];
+                        animSizes[r][c] = CELL_SIZE;      // Start at full pixel dimensions (50)
+                        trailOpacities[r][c] = 230;       // Set starting opacity level for light blue trail
+
+                        grid[r][c] = null; // Clean game layout logic instantly as required
                     }
                 }
+            }
+
+            // Fire up animation loops if lines were cleared
+            if (clearedLinesThisTurn > 0) {
+                animationTimer.start();
             }
 
             if (blockPlaced[1] && blockPlaced[2] && blockPlaced[3]) {
