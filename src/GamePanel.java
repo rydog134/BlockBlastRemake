@@ -5,12 +5,17 @@ import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+// --- NEW FOR VERSION 19: STANDARD AP CSA FILE I/O IMPORTS ---
+import java.io.File;
+import java.io.PrintWriter;
+import java.io.FileWriter;
+import java.util.Scanner;
 import java.util.ArrayList;
 
 public class GamePanel extends JPanel implements MouseListener, MouseMotionListener {
 
     private static final int CELL_SIZE = 50;
-    private static final int PREVIEW_CELL_SIZE = 35;
+    private static final int PREVIEW_CELL_SIZE = 28;
 
     private static final int GRID_ROWS = 8;
     private static final int GRID_COLS = 8;
@@ -82,6 +87,12 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
     private boolean gameOver = false;
 
+    // --- NEW FOR VERSION 19: SYSTEM VARIABLES TRACKING PERSISTENCE AND SCORE STATES ---
+    private String username = "Guest";
+    private int highScore = 0;
+    private boolean isNewHighScore = false;
+    private static final String FILE_NAME = "scores.txt";
+
     private final int buttonX = 225;
     private final int buttonY = 450;
     private final int buttonWidth = 150;
@@ -96,10 +107,101 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private ArrayList<Particle> particles = new ArrayList<>();
 
     public GamePanel() {
+        // --- NEW FOR VERSION 19: PROMPT FOR USERNAME ON INITIAL STARTUP CAPTURE ---
+        String input = JOptionPane.showInputDialog(null, "Enter your username:", "Sign In", JOptionPane.QUESTION_MESSAGE);
+        if (input != null && !input.trim().isEmpty()) {
+            username = input.trim();
+        }
+        loadOrCreateUser(username);
+
         addMouseListener(this);
         addMouseMotionListener(this);
         randomizeBlocks();
         setupAnimationEngine();
+    }
+
+    // --- NEW FOR VERSION 19: SCANS ACCOUNT HIGHSCORES OR REGISTERS RECORD ---
+    private void loadOrCreateUser(String targetUser) {
+        try {
+            File scoreFile = new File(FILE_NAME);
+            if (!scoreFile.exists()) {
+                scoreFile.createNewFile();
+                this.highScore = 0;
+                return;
+            }
+
+            Scanner fileScanner = new Scanner(scoreFile);
+            while (fileScanner.hasNextLine()) {
+                String line = fileScanner.nextLine();
+                if (line.contains(",")) {
+                    String[] parts = line.split(",");
+                    if (parts[0].equalsIgnoreCase(targetUser)) {
+                        this.highScore = Integer.parseInt(parts[1]);
+                        fileScanner.close();
+                        return;
+                    }
+                }
+            }
+            fileScanner.close();
+            this.highScore = 0; // Default fallback value for completely new player profile matching entries
+        } catch (Exception e) {
+            System.out.println("Error reading score file: " + e.getMessage());
+            this.highScore = 0;
+        }
+    }
+
+    // --- NEW FOR VERSION 19: UTILITY ROUTINE REWRITING DATA STRINGS BACK TO FILE STORAGE ---
+    private void saveHighScore() {
+        ArrayList<String> fileLines = new ArrayList<>();
+        boolean userFound = false;
+
+        try {
+            File scoreFile = new File(FILE_NAME);
+            if (scoreFile.exists()) {
+                Scanner fileScanner = new Scanner(scoreFile);
+                while (fileScanner.hasNextLine()) {
+                    String line = fileScanner.nextLine();
+                    if (line.contains(",")) {
+                        String[] parts = line.split(",");
+                        if (parts[0].equalsIgnoreCase(username)) {
+                            fileLines.add(username + "," + highScore);
+                            userFound = true;
+                        } else {
+                            fileLines.add(line);
+                        }
+                    }
+                }
+                fileScanner.close();
+            }
+
+            if (!userFound) {
+                fileLines.add(username + "," + highScore);
+            }
+
+            PrintWriter writer = new PrintWriter(new FileWriter(FILE_NAME, false));
+            for (String savedLine : fileLines) {
+                writer.println(savedLine);
+            }
+            writer.close();
+        } catch (Exception e) {
+            System.out.println("Error saving score file: " + e.getMessage());
+        }
+    }
+
+    private Color getDarkerShade(Color c) {
+        if (c == null) return Color.BLACK;
+        int r = (int)(c.getRed() * 0.70);
+        int g = (int)(c.getGreen() * 0.70);
+        int b = (int)(c.getBlue() * 0.70);
+        return new Color(r, g, b);
+    }
+
+    private Color getLighterShade(Color c) {
+        if (c == null) return Color.WHITE;
+        int r = (int)(c.getRed() * 0.85);
+        int g = (int)(c.getGreen() * 0.85);
+        int b = (int)(c.getBlue() * 0.85);
+        return new Color(r, g, b);
     }
 
     private void setupAnimationEngine() {
@@ -194,8 +296,7 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        // --- UPDATED FOR CLEANER TIMING: DARKER APP BACKGROUND BLUE COLOR ---
-        g.setColor(new Color(15, 25, 65)); // Deep midnight indigo canvas
+        g.setColor(new Color(15, 25, 65));
         g.fillRect(0, 0, getWidth(), getHeight());
 
         int gridWidth = GRID_COLS * CELL_SIZE;
@@ -205,14 +306,11 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
         blockHomeY = startY + gridHeight + 20;
 
-        // --- NEW FOR DEPTH LAYERING: SOLID GRAY GRID BACKGROUND SURFACE ---
-        g.setColor(new Color(195, 195, 195)); // Light gray container base
+        g.setColor(new Color(195, 195, 195));
         g.fillRect(startX, startY, gridWidth, gridHeight);
 
-        // --- NEW FOR DEPTH LAYERING: 5PX INSIDE OFFSET DARKER SHADE GRAY BORDER ---
-        g.setColor(new Color(145, 145, 145)); // Bevel frame shade
+        g.setColor(new Color(145, 145, 145));
         for (int i = 0; i < 5; i++) {
-            // Draws overlapping rectangles stepping inward by 1 pixel each pass
             g.drawRect(startX + i, startY + i, gridWidth - (2 * i), gridHeight - (2 * i));
         }
 
@@ -220,26 +318,63 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         g.setFont(new Font("Arial", Font.BOLD, 22));
         g.drawString("Score: " + score + "  (x" + multiplier + ")", startX, startY - 30);
 
+        // --- NEW FOR VERSION 19: DISPLAY WHITE USERNAME AND HIGHSCORE LABELS AT TOP RIGHT WINDOW SPACE ---
+        int topLabelsRightBoundaryX = startX + gridWidth;
+        g.setFont(new Font("Arial", Font.BOLD, 18));
+        String nameString = "Player: " + username;
+        String bestString = "Best: " + highScore;
+
+        int nameWidth = g.getFontMetrics().stringWidth(nameString);
+        int bestWidth = g.getFontMetrics().stringWidth(bestString);
+
+        g.drawString(nameString, topLabelsRightBoundaryX - nameWidth, startY - 42);
+        g.drawString(bestString, topLabelsRightBoundaryX - bestWidth, startY - 20);
+
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
                 int x = startX + col * CELL_SIZE;
                 int y = startY + row * CELL_SIZE;
 
-                // Replaced previous white grid box border with a subtle gray layout guide
-                g.setColor(new Color(215, 215, 215));
+                g.setColor(new Color(145, 145, 145));
+                g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+
+                g.setColor(new Color(195, 195, 195));
+                g.fillRect(x + 3, y + 3, CELL_SIZE - 6, CELL_SIZE - 6);
+
+                g.setColor(new Color(175, 175, 175));
                 g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
 
                 if (grid[row][col] != null) {
-                    g.setColor(grid[row][col]);
+                    Color baseColor = grid[row][col];
+
+                    g.setColor(getLighterShade(baseColor));
                     g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+
+                    g.setColor(getDarkerShade(baseColor));
+                    g.fillRect(x + 5, y + 5, CELL_SIZE - 5, CELL_SIZE - 5);
+
+                    g.setColor(baseColor);
+                    g.fillRect(x + 5, y + 5, CELL_SIZE - 10, CELL_SIZE - 10);
+
                     g.setColor(Color.BLACK);
                     g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
                 }
                 else if (animSizes[row][col] > 0) {
                     int size = Math.min(animSizes[row][col], CELL_SIZE);
                     int offset = (CELL_SIZE - size) / 2;
-                    g.setColor(animColors[row][col]);
+
+                    Color baseColor = animColors[row][col];
+                    int shadowOffset = (int)(size * 0.10);
+
+                    g.setColor(getLighterShade(baseColor));
                     g.fillRect(x + offset, y + offset, size, size);
+
+                    g.setColor(getDarkerShade(baseColor));
+                    g.fillRect(x + offset + shadowOffset, y + offset + shadowOffset, size - shadowOffset, size - shadowOffset);
+
+                    g.setColor(baseColor);
+                    g.fillRect(x + offset + shadowOffset, y + offset + shadowOffset, size - (2 * shadowOffset), size - (2 * shadowOffset));
+
                     g.setColor(Color.BLACK);
                     g.drawRect(x + offset, y + offset, size, size);
                 }
@@ -288,6 +423,14 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             g.setFont(new Font("Arial", Font.BOLD, 42));
             g.drawString("Game Over", 190, 320);
 
+            // --- NEW FOR VERSION 19: CONDITIONAL HIGH SCORE NOTIFICATION FLASH ---
+            if (isNewHighScore) {
+                g.setColor(Color.YELLOW);
+                g.setFont(new Font("Arial", Font.BOLD, 30));
+                g.drawString("High score!", 218, 250);
+            }
+
+            g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 28));
             g.drawString("Final Score: " + score, 205, 380);
 
@@ -302,11 +445,23 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     }
 
     private void drawBlock(Graphics g, int[][] shape, int anchorX, int anchorY, int size, Color blockColor) {
+        int shadowOffset = (int)(size * 0.10);
+        Color shadowColor = getDarkerShade(blockColor);
+        Color highlightColor = getLighterShade(blockColor);
+
         for (int[] cell : shape) {
             int x = anchorX + cell[1] * size;
             int y = anchorY + cell[0] * size;
-            g.setColor(blockColor);
+
+            g.setColor(highlightColor);
             g.fillRect(x, y, size, size);
+
+            g.setColor(shadowColor);
+            g.fillRect(x + shadowOffset, y + shadowOffset, size - shadowOffset, size - shadowOffset);
+
+            g.setColor(blockColor);
+            g.fillRect(x + shadowOffset, y + shadowOffset, size - (2 * shadowOffset), size - (2 * shadowOffset));
+
             g.setColor(Color.BLACK);
             g.drawRect(x, y, size, size);
         }
@@ -339,6 +494,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 blockPlaced[1] = false;
                 blockPlaced[2] = false;
                 blockPlaced[3] = false;
+                // --- NEW FOR VERSION 19: RESET HIGH SCORE CEILING FLAG FOR SUBSEQUENT ROUND RUNS ---
+                isNewHighScore = false;
 
                 for (int r = 0; r < GRID_ROWS; r++) {
                     for (int c = 0; c < GRID_COLS; c++) {
@@ -537,6 +694,13 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             }
 
             checkGameOver();
+
+            // --- NEW FOR VERSION 19: TRIGGER FILE SAVE SEQUENCE UPON ENCOUNTERING LOSS STATE CONDITIONS ---
+            if (gameOver && score > highScore) {
+                highScore = score;
+                isNewHighScore = true;
+                saveHighScore();
+            }
         }
 
         selectedBlock = -1;
