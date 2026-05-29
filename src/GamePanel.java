@@ -5,7 +5,6 @@ import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-// --- NEW FOR VERSION 19: STANDARD AP CSA FILE I/O IMPORTS ---
 import java.io.File;
 import java.io.PrintWriter;
 import java.io.FileWriter;
@@ -43,13 +42,26 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private static final int[][] PENTO_U   = {{0,0}, {2,0}, {0,1}, {1,1}, {2,1}};
     private static final int[][] PENTO_X   = {{1,0}, {0,1}, {1,1}, {2,1}, {1,2}};
 
-    private static final int[][][] SHAPE_POOL = {
+    // --- NEW FOR VERSION 20: ADDED 3x3 BLOCK AND ZIGZAG PIECE BASE MATRICES ---
+    private static final int[][] SQUARE_3X3 = {
+            {0,0}, {0,1}, {0,2},
+            {1,0}, {1,1}, {1,2},
+            {2,0}, {2,1}, {2,2}
+    };
+    private static final int[][] ZIGZAG = {{0,0}, {0,1}, {1,1}, {1,2}};
+
+    // The raw seed pool containing all unique baseline geometry variations
+    private static final int[][][] BASE_SHAPE_POOL = {
             MONOMINO,
             DOMINO_H, DOMINO_V,
             BLOCK_1, TROMINO_V, BLOCK_2,
             BLOCK_3, TETRIS_I_V, TETRIS_T, TETRIS_L,
-            PENTO_I_H, PENTO_U, PENTO_X
+            PENTO_I_H, PENTO_U, PENTO_X,
+            SQUARE_3X3, ZIGZAG
     };
+
+    // --- NEW FOR VERSION 20: GENERATED AT RUNTIME TO HOLD ALL 4 UNIQUE COMPASS ORIENTATIONS ---
+    private static final int[][][] SHAPE_POOL = generateRotatedPool(BASE_SHAPE_POOL);
 
     private static final Color[] COLOR_PALETTE = {
             Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.CYAN, Color.MAGENTA, Color.PINK
@@ -87,7 +99,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
     private boolean gameOver = false;
 
-    // --- NEW FOR VERSION 19: SYSTEM VARIABLES TRACKING PERSISTENCE AND SCORE STATES ---
     private String username = "Guest";
     private int highScore = 0;
     private boolean isNewHighScore = false;
@@ -107,7 +118,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private ArrayList<Particle> particles = new ArrayList<>();
 
     public GamePanel() {
-        // --- NEW FOR VERSION 19: PROMPT FOR USERNAME ON INITIAL STARTUP CAPTURE ---
         String input = JOptionPane.showInputDialog(null, "Enter your username:", "Sign In", JOptionPane.QUESTION_MESSAGE);
         if (input != null && !input.trim().isEmpty()) {
             username = input.trim();
@@ -120,7 +130,46 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         setupAnimationEngine();
     }
 
-    // --- NEW FOR VERSION 19: SCANS ACCOUNT HIGHSCORES OR REGISTERS RECORD ---
+    // --- NEW FOR VERSION 20: COMPASS ORIENTATION MATRIX GENERATOR UTILITIES ---
+    private static int[][][] generateRotatedPool(int[][][] basePool) {
+        ArrayList<int[][]> expanded = new ArrayList<>();
+        for (int[][] shape : basePool) {
+            for (int turn = 0; turn < 4; turn++) {
+                expanded.add(rotateShape(shape, turn));
+            }
+        }
+        return expanded.toArray(new int[expanded.size()][][]);
+    }
+
+    private static int[][] rotateShape(int[][] shape, int turns) {
+        if (turns == 0) return shape;
+
+        int[][] current = shape;
+        for (int t = 0; t < turns; t++) {
+            int[][] next = new int[current.length][2];
+            for (int i = 0; i < current.length; i++) {
+                // Apply matrix rotation transform rule: (row, col) -> (col, -row)
+                next[i][0] = current[i][1];
+                next[i][1] = -current[i][0];
+            }
+            current = next;
+        }
+
+        // Shift shape coordinates back into positive index space (top-left aligned)
+        int minRow = Integer.MAX_VALUE;
+        int minCol = Integer.MAX_VALUE;
+        for (int[] cell : current) {
+            if (cell[0] < minRow) minRow = cell[0];
+            if (cell[1] < minCol) minCol = cell[1];
+        }
+        for (int[] cell : current) {
+            cell[0] -= minRow;
+            cell[1] -= minCol;
+        }
+
+        return current;
+    }
+
     private void loadOrCreateUser(String targetUser) {
         try {
             File scoreFile = new File(FILE_NAME);
@@ -143,14 +192,13 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 }
             }
             fileScanner.close();
-            this.highScore = 0; // Default fallback value for completely new player profile matching entries
+            this.highScore = 0;
         } catch (Exception e) {
             System.out.println("Error reading score file: " + e.getMessage());
             this.highScore = 0;
         }
     }
 
-    // --- NEW FOR VERSION 19: UTILITY ROUTINE REWRITING DATA STRINGS BACK TO FILE STORAGE ---
     private void saveHighScore() {
         ArrayList<String> fileLines = new ArrayList<>();
         boolean userFound = false;
@@ -318,7 +366,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         g.setFont(new Font("Arial", Font.BOLD, 22));
         g.drawString("Score: " + score + "  (x" + multiplier + ")", startX, startY - 30);
 
-        // --- NEW FOR VERSION 19: DISPLAY WHITE USERNAME AND HIGHSCORE LABELS AT TOP RIGHT WINDOW SPACE ---
         int topLabelsRightBoundaryX = startX + gridWidth;
         g.setFont(new Font("Arial", Font.BOLD, 18));
         String nameString = "Player: " + username;
@@ -423,7 +470,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             g.setFont(new Font("Arial", Font.BOLD, 42));
             g.drawString("Game Over", 190, 320);
 
-            // --- NEW FOR VERSION 19: CONDITIONAL HIGH SCORE NOTIFICATION FLASH ---
             if (isNewHighScore) {
                 g.setColor(Color.YELLOW);
                 g.setFont(new Font("Arial", Font.BOLD, 30));
@@ -494,7 +540,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 blockPlaced[1] = false;
                 blockPlaced[2] = false;
                 blockPlaced[3] = false;
-                // --- NEW FOR VERSION 19: RESET HIGH SCORE CEILING FLAG FOR SUBSEQUENT ROUND RUNS ---
                 isNewHighScore = false;
 
                 for (int r = 0; r < GRID_ROWS; r++) {
@@ -695,7 +740,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
             checkGameOver();
 
-            // --- NEW FOR VERSION 19: TRIGGER FILE SAVE SEQUENCE UPON ENCOUNTERING LOSS STATE CONDITIONS ---
             if (gameOver && score > highScore) {
                 highScore = score;
                 isNewHighScore = true;
