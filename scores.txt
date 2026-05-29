@@ -1,6 +1,6 @@
 Ryan Khatiblou,254
 Maya Balmelli,639
-Gabe Marchuk,-2058
+Gabe Marchuk,0
 kate,654
 abbycat,453
 decy,437

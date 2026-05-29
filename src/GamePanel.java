@@ -42,7 +42,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private static final int[][] PENTO_U   = {{0,0}, {2,0}, {0,1}, {1,1}, {2,1}};
     private static final int[][] PENTO_X   = {{1,0}, {0,1}, {1,1}, {2,1}, {1,2}};
 
-    // --- NEW FOR VERSION 20: ADDED 3x3 BLOCK AND ZIGZAG PIECE BASE MATRICES ---
     private static final int[][] SQUARE_3X3 = {
             {0,0}, {0,1}, {0,2},
             {1,0}, {1,1}, {1,2},
@@ -50,7 +49,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     };
     private static final int[][] ZIGZAG = {{0,0}, {0,1}, {1,1}, {1,2}};
 
-    // The raw seed pool containing all unique baseline geometry variations
     private static final int[][][] BASE_SHAPE_POOL = {
             MONOMINO,
             DOMINO_H, DOMINO_V,
@@ -60,7 +58,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             SQUARE_3X3, ZIGZAG
     };
 
-    // --- NEW FOR VERSION 20: GENERATED AT RUNTIME TO HOLD ALL 4 UNIQUE COMPASS ORIENTATIONS ---
     private static final int[][][] SHAPE_POOL = generateRotatedPool(BASE_SHAPE_POOL);
 
     private static final Color[] COLOR_PALETTE = {
@@ -104,6 +101,10 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     private boolean isNewHighScore = false;
     private static final String FILE_NAME = "scores.txt";
 
+    // --- NEW FOR VERSION 21: EASTER EGG TRACKING CONDITIONS FOR LOW-SCORE MODIFIER ---
+    private boolean isGabe = false;
+    private boolean isNewLowScore = false;
+
     private final int buttonX = 225;
     private final int buttonY = 450;
     private final int buttonWidth = 150;
@@ -122,6 +123,12 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         if (input != null && !input.trim().isEmpty()) {
             username = input.trim();
         }
+
+        // --- NEW FOR VERSION 21: EVALUATES USERNAME STRING FOR EASTER EGG TRIGGER MATCHES ---
+        if (username.toLowerCase().contains("gabe")) {
+            isGabe = true;
+        }
+
         loadOrCreateUser(username);
 
         addMouseListener(this);
@@ -130,7 +137,6 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         setupAnimationEngine();
     }
 
-    // --- NEW FOR VERSION 20: COMPASS ORIENTATION MATRIX GENERATOR UTILITIES ---
     private static int[][][] generateRotatedPool(int[][][] basePool) {
         ArrayList<int[][]> expanded = new ArrayList<>();
         for (int[][] shape : basePool) {
@@ -148,14 +154,12 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         for (int t = 0; t < turns; t++) {
             int[][] next = new int[current.length][2];
             for (int i = 0; i < current.length; i++) {
-                // Apply matrix rotation transform rule: (row, col) -> (col, -row)
                 next[i][0] = current[i][1];
                 next[i][1] = -current[i][0];
             }
             current = next;
         }
 
-        // Shift shape coordinates back into positive index space (top-left aligned)
         int minRow = Integer.MAX_VALUE;
         int minCol = Integer.MAX_VALUE;
         for (int[] cell : current) {
@@ -369,7 +373,9 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         int topLabelsRightBoundaryX = startX + gridWidth;
         g.setFont(new Font("Arial", Font.BOLD, 18));
         String nameString = "Player: " + username;
-        String bestString = "Best: " + highScore;
+
+        // --- NEW FOR VERSION 21: CONVERTS RECORD HOOK TAG FROM BEST TO WORST FOR EASTER EGG PROFILES ---
+        String bestString = isGabe ? "Worst: " + highScore : "Best: " + highScore;
 
         int nameWidth = g.getFontMetrics().stringWidth(nameString);
         int bestWidth = g.getFontMetrics().stringWidth(bestString);
@@ -475,6 +481,12 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 g.setFont(new Font("Arial", Font.BOLD, 30));
                 g.drawString("High score!", 218, 250);
             }
+            // --- NEW FOR VERSION 21: LOW SCORE BANNER CONTEXT REPLACEMENT FOR EASTER EGG ROUNDS ---
+            else if (isNewLowScore) {
+                g.setColor(Color.YELLOW);
+                g.setFont(new Font("Arial", Font.BOLD, 30));
+                g.drawString("Low score!", 223, 250);
+            }
 
             g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 28));
@@ -541,6 +553,8 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 blockPlaced[2] = false;
                 blockPlaced[3] = false;
                 isNewHighScore = false;
+                // --- NEW FOR VERSION 21: RESET EASTER EGG NOTIFICATION STATE ---
+                isNewLowScore = false;
 
                 for (int r = 0; r < GRID_ROWS; r++) {
                     for (int c = 0; c < GRID_COLS; c++) {
@@ -687,7 +701,12 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
                 }
             }
 
-            score += pointsGainedThisTurn * multiplier;
+            // --- NEW FOR VERSION 21: SUBTRACTS INSTEAD OF ADDS SCORE QUANTITIES IF IN EASTER EGG MODE ---
+            if (isGabe) {
+                score -= pointsGainedThisTurn * multiplier;
+            } else {
+                score += pointsGainedThisTurn * multiplier;
+            }
 
             for (int r = 0; r < GRID_ROWS; r++) {
                 for (int c = 0; c < GRID_COLS; c++) {
@@ -740,10 +759,21 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
 
             checkGameOver();
 
-            if (gameOver && score > highScore) {
-                highScore = score;
-                isNewHighScore = true;
-                saveHighScore();
+            // --- NEW FOR VERSION 21: FILE LOGGING REVERSAL AND RECORD LOWERING TARGET CHECKS ---
+            if (gameOver) {
+                if (isGabe) {
+                    if (score < highScore) {
+                        highScore = score;
+                        isNewLowScore = true;
+                        saveHighScore();
+                    }
+                } else {
+                    if (score > highScore) {
+                        highScore = score;
+                        isNewHighScore = true;
+                        saveHighScore();
+                    }
+                }
             }
         }
 
